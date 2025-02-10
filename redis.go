@@ -3,7 +3,6 @@ package mercure
 import (
 	"encoding/json"
 	"fmt"
-	"math/rand"
 	"net/url"
 	"strconv"
 	"sync"
@@ -15,9 +14,33 @@ import (
 const (
 	defaultRedisStreamName       = "updates"
 	defaultRedisSubscribersSize  = 100000
-	defaultRedisStreamBatch      = 1000
 	defaultRedisHistoryLimit     = 0
 	defaultRedisCleanupFrequency = 0.3
+)
+
+const (
+	dispatchScript = `
+	local stream = KEYS[1]
+	local updateID = ARGV[1]
+	local updateData = ARGV[2]
+	local historyLimit = tonumber(ARGV[3])
+	local cleanupFrequency = tonumber(ARGV[4])
+	
+	redis.call("XADD", stream, "*", 
+			"updateID", updateID,
+			"updateData", updateData
+	)
+	
+	local length = redis.call("XLEN", stream)
+	
+	if historyLimit > 0 and cleanupFrequency > 0 and length > historyLimit then
+			if cleanupFrequency == 1 or math.random() < (1 / cleanupFrequency) then
+					redis.call("XTRIM", stream, "MAXLEN", historyLimit)
+			end
+	end
+	
+	return true
+`
 )
 
 func init() {
@@ -30,11 +53,11 @@ type RedisTransport struct {
 	logger           Logger
 	client           *redis.Client
 	stream           string
-	streamBatch      int
 	historyLimit     int
 	subscribersSize  int
 	cleanupFrequency float64
 	closed           bool
+	dispatch         *redis.Script
 }
 
 func NewRedisTransport(transportUrl *url.URL, logger Logger) (Transport, error) {
@@ -59,14 +82,6 @@ func NewRedisTransport(transportUrl *url.URL, logger Logger) (Transport, error) 
 		subscribersSize, err = strconv.Atoi(subscribersSizeParameter)
 		if err != nil {
 			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "subscribers_size" parameter %q`, subscribersSize), err}
-		}
-	}
-
-	streamBatch := defaultRedisStreamBatch
-	if streamBatchParameter := q.Get("stream_batch"); streamBatchParameter != "" {
-		streamBatch, err = strconv.Atoi(streamBatchParameter)
-		if err != nil {
-			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "stream_batch" parameter %q`, subscribersSize), err}
 		}
 	}
 
@@ -96,7 +111,7 @@ func NewRedisTransport(transportUrl *url.URL, logger Logger) (Transport, error) 
 		Addr:     address,
 	})
 
-	return NewRedisTransportInstance(logger, client, streamName, historyLimit, subscribersSize, streamBatch, cleanupFrequency)
+	return NewRedisTransportInstance(logger, client, streamName, historyLimit, subscribersSize, cleanupFrequency)
 }
 
 func NewRedisTransportInstance(
@@ -105,7 +120,6 @@ func NewRedisTransportInstance(
 	stream string,
 	historyLimit int,
 	subscribersSize int,
-	streamBatch int,
 	cleanupFrequency float64,
 ) (*RedisTransport, error) {
 	return &RedisTransport{
@@ -115,9 +129,9 @@ func NewRedisTransportInstance(
 		historyLimit:     historyLimit,
 		cleanupFrequency: cleanupFrequency,
 		subscribersSize:  subscribersSize,
-		streamBatch:      streamBatch,
 		subscribers:      NewSubscriberList(subscribersSize),
 		closed:           false,
+		dispatch:         redis.NewScript(dispatchScript),
 	}, nil
 }
 
@@ -130,33 +144,14 @@ func (t *RedisTransport) Dispatch(update *Update) error {
 
 	AssignUUID(update)
 
-	updateData, err := json.Marshal(*update)
+	updateData, err := json.Marshal(update)
 	if err != nil {
 		return fmt.Errorf("error when marshaling update: %w", err)
 	}
 
-	pipeline := t.client.TxPipeline()
-	pipeline.XAdd(context.Background(), &redis.XAddArgs{Stream: t.stream, Values: map[string]interface{}{"updateID": update.ID, "updateData": updateData}})
-	count := pipeline.Incr(context.Background(), t.stream+"-count")
-	_, err = pipeline.Exec(context.Background())
+	_, err = t.dispatch.Run(context.Background(), t.client, []string{t.stream}, update.ID, updateData, t.historyLimit, t.cleanupFrequency).Result()
 	if err != nil {
-		return fmt.Errorf("error when adding to Redis stream: %w", err)
-	}
-
-	needCleanup := t.historyLimit != 0 &&
-		t.cleanupFrequency != 0 &&
-		t.historyLimit < int(count.Val()) &&
-		(t.cleanupFrequency == 1 || rand.Float64() >= t.cleanupFrequency)
-
-	if needCleanup {
-		trimmed, err := t.client.XTrimMaxLen(context.Background(), t.stream, int64(t.historyLimit)).Result()
-		if err != nil {
-			return fmt.Errorf("unable to cleanup Redis: %w", err)
-		}
-		_, err = t.client.DecrBy(context.Background(), t.stream+"-count", trimmed).Result()
-		if err != nil {
-			return fmt.Errorf("unable to cleanup Redis: %w", err)
-		}
+		return fmt.Errorf("redis script execution failed: %w", err)
 	}
 
 	for _, s := range t.subscribers.MatchAny(update) {
@@ -168,30 +163,30 @@ func (t *RedisTransport) Dispatch(update *Update) error {
 
 func (t *RedisTransport) AddSubscriber(s *LocalSubscriber) error {
 	t.Lock()
+	defer t.Unlock()
 	if t.closed {
-		t.Unlock()
 		return ErrClosedTransport
 	}
-	t.subscribers.Add(s)
-	t.Unlock()
+
 	if s.RequestLastEventID != "" {
-		readResponse, err := t.client.XRead(context.Background(), &redis.XReadArgs{Streams: []string{t.stream, s.RequestLastEventID}, Count: int64(t.streamBatch), Block: 0}).Result()
+		messages, err := t.client.XRange(context.Background(), t.stream, s.RequestLastEventID, "+").Result()
 		if err != nil {
 			return fmt.Errorf("unable to get history from Redis: %w", err)
 		}
-		for _, message := range readResponse {
-			for _, msg := range message.Messages {
-				var update *Update
-				if err := json.Unmarshal([]byte(msg.Values["updateData"].(string)), &update); err != nil {
-					return fmt.Errorf("unable to unmarshal update: %w", err)
-				}
-				if !s.Dispatch(update, true) {
-					break
-				}
+		for _, msg := range messages {
+			var update *Update
+			if err := json.Unmarshal([]byte(msg.Values["updateData"].(string)), &update); err != nil {
+				return fmt.Errorf("unable to unmarshal update: %w", err)
+			}
+			if !s.Dispatch(update, true) {
+				break
 			}
 		}
 	}
+
+	t.subscribers.Add(s)
 	s.Ready()
+
 	return nil
 }
 
