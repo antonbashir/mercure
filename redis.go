@@ -6,41 +6,25 @@ import (
 	"net/url"
 	"strconv"
 	"sync"
+	"time"
 
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/context"
 )
 
 const (
-	defaultRedisStreamName       = "updates"
-	defaultRedisSubscribersSize  = 100000
-	defaultRedisHistoryLimit     = 0
-	defaultRedisCleanupFrequency = 0.3
+	defaultRedisReceiveTimer           = 300 * time.Millisecond
+	defaultSubscriberSize              = 10000
+	defaultSubscriberBroadcastParallel = 16
 )
 
 const (
-	dispatchScript = `
-	local stream = KEYS[1]
-	local updateID = ARGV[1]
-	local updateData = ARGV[2]
-	local historyLimit = tonumber(ARGV[3])
-	local cleanupFrequency = tonumber(ARGV[4])
-	
-	redis.call("XADD", stream, "*", 
-			"updateID", updateID,
-			"updateData", updateData
-	)
-	
-	local length = redis.call("XLEN", stream)
-	
-	if historyLimit > 0 and cleanupFrequency > 0 and length > historyLimit then
-			if cleanupFrequency == 1 or math.random() < (1 / cleanupFrequency) then
-					redis.call("XTRIM", stream, "MAXLEN", historyLimit)
-			end
-	end
-	
-	return true
-`
+	lastEventIdKey = "lastEventId"
+	publishScript  = `
+		redis.call("SET", KEYS[1], ARGV[1])
+		redis.call("PUBLISH", "*", ARGV[2])
+		return true
+	`
 )
 
 func init() {
@@ -49,56 +33,59 @@ func init() {
 
 type RedisTransport struct {
 	sync.RWMutex
-	subscribers      *SubscriberList
-	logger           Logger
-	client           *redis.Client
-	stream           string
-	historyLimit     int
-	subscribersSize  int
-	cleanupFrequency float64
-	closed           bool
-	dispatch         *redis.Script
+	logger                       Logger
+	client                       *redis.Client
+	subscribers                  *SubscriberList
+	subscribersBroadcastParallel int
+	receiveTimer                 time.Duration
+	dispatcher                   chan SubscriberPayload
+	closed                       chan any
+	publishScript                *redis.Script
+}
+
+type SubscriberPayload struct {
+	subscriber *LocalSubscriber
+	payload    Update
 }
 
 func NewRedisTransport(transportUrl *url.URL, logger Logger) (Transport, error) {
 	var err error
 	q := transportUrl.Query()
 
-	streamName := defaultRedisStreamName
-	if q.Get("stream_name") != "" {
-		streamName = q.Get("stream_name")
-	}
-
-	historyLimit := defaultRedisHistoryLimit
-	if historyLimitParameter := q.Get("history_limit"); historyLimitParameter != "" {
-		historyLimit, err = strconv.Atoi(historyLimitParameter)
+	receiveTimer := defaultRedisReceiveTimer
+	receiveTimerParameter := q.Get("receive_timer")
+	if receiveTimerParameter != "" {
+		receiveTimer, err = time.ParseDuration(receiveTimerParameter)
 		if err != nil {
-			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "history_limit" parameter %q`, historyLimit), err}
+			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "receive_timer" parameter %q`, receiveTimerParameter), err}
 		}
 	}
 
-	subscribersSize := defaultRedisSubscribersSize
-	if subscribersSizeParameter := q.Get("subscribers_size"); subscribersSizeParameter != "" {
+	subscribersSize := defaultSubscriberSize
+	subscribersSizeParameter := q.Get("subscribers_size")
+	if subscribersSizeParameter != "" {
 		subscribersSize, err = strconv.Atoi(subscribersSizeParameter)
 		if err != nil {
-			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "subscribers_size" parameter %q`, subscribersSize), err}
+			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "subscribers_size" parameter %q`, subscribersSizeParameter), err}
 		}
 	}
 
-	cleanupFrequency := defaultRedisCleanupFrequency
-	cleanupFrequencyParameter := q.Get("cleanup_frequency")
-	if cleanupFrequencyParameter != "" {
-		cleanupFrequency, err = strconv.ParseFloat(cleanupFrequencyParameter, 64)
+	subscribersBroadcastParallel := defaultSubscriberBroadcastParallel
+	subscribersBroadcastParallelParameter := q.Get("subscribers_broadcast_parallel")
+	if subscribersBroadcastParallelParameter != "" {
+		subscribersBroadcastParallel, err = strconv.Atoi(subscribersBroadcastParallelParameter)
 		if err != nil {
-			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "cleanup_frequency" parameter %q`, cleanupFrequencyParameter), err}
+			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "subscribers_broadcast_parallel" parameter %q`, subscribersBroadcastParallelParameter), err}
 		}
 	}
 
+	username := ""
+	password := ""
 	credentials := transportUrl.User
-	if credentials == nil {
-		return nil, &TransportError{transportUrl.Redacted(), "missing credentials", err}
+	if credentials != nil {
+		username = credentials.Username()
+		password, _ = credentials.Password()
 	}
-	password, _ := credentials.Password()
 
 	address := transportUrl.Host
 	if address == "" {
@@ -106,130 +93,172 @@ func NewRedisTransport(transportUrl *url.URL, logger Logger) (Transport, error) 
 	}
 
 	client := redis.NewClient(&redis.Options{
-		Username: credentials.Username(),
+		Username: username,
 		Password: password,
 		Addr:     address,
 	})
 
-	return NewRedisTransportInstance(logger, client, streamName, historyLimit, subscribersSize, cleanupFrequency)
+	return NewRedisTransportInstance(logger, client, receiveTimer, subscribersSize, subscribersBroadcastParallel)
 }
 
 func NewRedisTransportInstance(
 	logger Logger,
 	client *redis.Client,
-	stream string,
-	historyLimit int,
+	receiveTimer time.Duration,
 	subscribersSize int,
-	cleanupFrequency float64,
+	subscribersBroadcastParallel int,
 ) (*RedisTransport, error) {
-	return &RedisTransport{
-		logger:           logger,
-		client:           client,
-		stream:           stream,
-		historyLimit:     historyLimit,
-		cleanupFrequency: cleanupFrequency,
-		subscribersSize:  subscribersSize,
-		subscribers:      NewSubscriberList(subscribersSize),
-		closed:           false,
-		dispatch:         redis.NewScript(dispatchScript),
-	}, nil
+	subscriber := client.PSubscribe(context.Background(), "*")
+
+	transport := &RedisTransport{
+		logger:                       logger,
+		client:                       client,
+		subscribers:                  NewSubscriberList(subscribersSize),
+		subscribersBroadcastParallel: subscribersBroadcastParallel,
+		publishScript:                redis.NewScript(publishScript),
+		receiveTimer:                 receiveTimer,
+		closed:                       make(chan any),
+		dispatcher:                   make(chan SubscriberPayload),
+	}
+
+	go transport.subscribe(subscriber)
+
+	wg := sync.WaitGroup{}
+	wg.Add(subscribersBroadcastParallel)
+	for range subscribersBroadcastParallel {
+		go transport.dispatch(&wg)
+	}
+	go func() {
+		wg.Wait()
+		close(transport.dispatcher)
+	}()
+
+	return transport, nil
+}
+
+func (u Update) MarshalBinary() ([]byte, error) {
+	return json.Marshal(u)
 }
 
 func (t *RedisTransport) Dispatch(update *Update) error {
-	t.Lock()
-	defer t.Unlock()
-	if t.closed {
+	select {
+	case <-t.closed:
 		return ErrClosedTransport
+	default:
 	}
 
 	AssignUUID(update)
 
-	updateData, err := json.Marshal(update)
+	keys := []string{lastEventIdKey}
+	arguments := []interface{}{update.ID, update}
+	_, err := t.publishScript.Run(context.Background(), t.client, keys, arguments...).Result()
 	if err != nil {
-		return fmt.Errorf("error when marshaling update: %w", err)
-	}
-
-	_, err = t.dispatch.Run(context.Background(), t.client, []string{t.stream}, update.ID, updateData, t.historyLimit, t.cleanupFrequency).Result()
-	if err != nil {
-		return fmt.Errorf("redis script execution failed: %w", err)
-	}
-
-	for _, s := range t.subscribers.MatchAny(update) {
-		s.Dispatch(update, false)
+		return fmt.Errorf("redis failed to publish: %w", err)
 	}
 
 	return nil
 }
 
 func (t *RedisTransport) AddSubscriber(s *LocalSubscriber) error {
+	select {
+	case <-t.closed:
+		return ErrClosedTransport
+	default:
+	}
 	t.Lock()
 	defer t.Unlock()
-	if t.closed {
-		return ErrClosedTransport
-	}
-
-	if s.RequestLastEventID != "" {
-		messages, err := t.client.XRange(context.Background(), t.stream, s.RequestLastEventID, "+").Result()
-		if err != nil {
-			return fmt.Errorf("unable to get history from Redis: %w", err)
-		}
-		for _, msg := range messages {
-			var update *Update
-			if err := json.Unmarshal([]byte(msg.Values["updateData"].(string)), &update); err != nil {
-				return fmt.Errorf("unable to unmarshal update: %w", err)
-			}
-			if !s.Dispatch(update, true) {
-				break
-			}
-		}
-	}
-
 	t.subscribers.Add(s)
 	s.Ready()
-
 	return nil
 }
 
 func (t *RedisTransport) RemoveSubscriber(s *LocalSubscriber) error {
+	select {
+	case <-t.closed:
+		return ErrClosedTransport
+	default:
+	}
 	t.Lock()
 	defer t.Unlock()
-	if t.closed {
-		return ErrClosedTransport
-	}
 	t.subscribers.Remove(s)
 	return nil
 }
 
 func (t *RedisTransport) GetSubscribers() (string, []*Subscriber, error) {
+	select {
+	case <-t.closed:
+		return "", nil, ErrClosedTransport
+	default:
+	}
 	t.RLock()
 	defer t.RUnlock()
-
-	lastEventId := EarliestLastEventID
-	readResponse, err := t.client.XRead(context.Background(), &redis.XReadArgs{Streams: []string{t.stream, ">"}, Count: 1, Block: 0}).Result()
+	lastEventId, err := t.client.Get(context.Background(), lastEventIdKey).Result()
 	if err != nil {
-		return "", nil, &TransportError{err: err}
+		return "", nil, fmt.Errorf("redis failed to get last event id: %w", err)
 	}
-
-	if len(readResponse) > 0 && len(readResponse[0].Messages) > 0 {
-		lastEventId = readResponse[0].Messages[0].ID
-	}
-
 	return lastEventId, getSubscribers(t.subscribers), nil
 }
 
 func (t *RedisTransport) Close() (err error) {
+	select {
+	case <-t.closed:
+		return ErrClosedTransport
+	default:
+	}
 	t.Lock()
 	defer t.Unlock()
-	if t.closed {
-		return ErrClosedTransport
-	}
 	t.subscribers.Walk(0, func(s *LocalSubscriber) bool {
 		s.Disconnect()
 		return true
 	})
 	err = t.client.Close()
-	t.closed = true
-	return nil
+	close(t.closed)
+	return err
+}
+
+func (t *RedisTransport) subscribe(subscriber *redis.PubSub) {
+	ticker := time.NewTicker(t.receiveTimer)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ticker.C:
+			message, err := subscriber.ReceiveMessage(context.Background())
+			if err != nil {
+				t.logger.Error(err.Error())
+				continue
+			}
+			var update Update
+			if err := json.Unmarshal([]byte(message.Payload), &update); err != nil {
+				t.logger.Error(err.Error())
+				continue
+			}
+			topics := []string{}
+			topics = append(topics, update.Topics...)
+			t.Lock()
+			for _, subscriber := range t.subscribers.MatchAny(&update) {
+				update.Topics = topics
+				t.dispatcher <- SubscriberPayload{subscriber, update}
+			}
+			t.Unlock()
+		case <-t.closed:
+			if err := subscriber.Close(); err != nil {
+				t.logger.Error(err.Error())
+			}
+			return
+		}
+	}
+}
+
+func (t *RedisTransport) dispatch(wg *sync.WaitGroup) {
+	defer wg.Done()
+	for {
+		select {
+		case message := <-t.dispatcher:
+			message.subscriber.Dispatch(&message.payload, false)
+		case <-t.closed:
+			return
+		}
+	}
 }
 
 var (
