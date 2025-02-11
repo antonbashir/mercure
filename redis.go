@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultRedisReceiveTimer           = 300 * time.Millisecond
-	defaultSubscriberSize              = 10000
+	defaultSubscriberSize              = 100000
 	defaultSubscriberBroadcastParallel = 16
 )
 
