@@ -84,6 +84,7 @@ func NewRedisTransportInstance(
 func (u Update) MarshalBinary() ([]byte, error) {
 	bytes, err := json.Marshal(u)
 	if err != nil {
+
 		return nil, err
 	}
 
@@ -93,6 +94,7 @@ func (u Update) MarshalBinary() ([]byte, error) {
 func (t *RedisTransport) Dispatch(update *Update) error {
 	select {
 	case <-t.closed:
+
 		return ErrClosedTransport
 	default:
 	}
@@ -132,6 +134,7 @@ func (t *RedisTransport) RemoveSubscriber(s *LocalSubscriber) error {
 	t.Lock()
 	defer t.Unlock()
 	t.subscribers.Remove(s)
+
 	return nil
 }
 
@@ -145,8 +148,10 @@ func (t *RedisTransport) GetSubscribers() (string, []*Subscriber, error) {
 	defer t.RUnlock()
 	lastEventID, err := t.client.Get(context.Background(), lastEventIDKey).Result()
 	if err != nil {
+
 		return "", nil, fmt.Errorf("redis failed to get last event id: %w", err)
 	}
+
 	return lastEventID, getSubscribers(t.subscribers), nil
 }
 
@@ -160,10 +165,12 @@ func (t *RedisTransport) Close() (err error) {
 	defer t.Unlock()
 	t.subscribers.Walk(0, func(s *LocalSubscriber) bool {
 		s.Disconnect()
+
 		return true
 	})
 	err = t.client.Close()
 	close(t.closed)
+
 	return err
 }
 
