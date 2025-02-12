@@ -51,7 +51,7 @@ func (r *Redis) Provision(ctx caddy.Context) error {
 			return nil, err
 		}
 
-		return TransportDestructor[*mercure.RedisTransport]{Transport: t.(*mercure.RedisTransport)}, nil
+		return TransportDestructor[*mercure.RedisTransport]{Transport: t}, nil
 	})
 	if err != nil {
 		return err

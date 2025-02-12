@@ -36,7 +36,7 @@ type SubscriberPayload struct {
 	payload    Update
 }
 
-func NewRedisTransport(logger Logger, address string, username string, password string, dispatchTimer time.Duration, subscribersSize int, subscribersBroadcastParallel int) (Transport, error) {
+func NewRedisTransport(logger Logger, address string, username string, password string, dispatchTimer time.Duration, subscribersSize int, subscribersBroadcastParallel int) (*RedisTransport, error) {
 	client := redis.NewClient(&redis.Options{
 		Username: username,
 		Password: password,
