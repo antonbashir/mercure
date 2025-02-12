@@ -84,7 +84,7 @@ func NewRedisTransportInstance(
 func (u Update) MarshalBinary() ([]byte, error) {
 	bytes, err := json.Marshal(u)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unable to marshal: %w", err)
 	}
 
 	return bytes, nil
@@ -169,7 +169,7 @@ func (t *RedisTransport) Close() (err error) {
 	err = t.client.Close()
 	close(t.closed)
 
-	return err
+	return fmt.Errorf("unable to close: %w", err) 
 }
 
 func (t *RedisTransport) subscribe(subscriber *redis.PubSub) {

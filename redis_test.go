@@ -20,6 +20,7 @@ const (
 
 func initialize() *RedisTransport {
 	transport, _ := NewRedisTransport(zap.NewNop(), redisHost, "", "", redisDispatchTimer, redisSubscriberSize, redisSubscriberBroadcastParallel)
+
 	return transport
 }
 
