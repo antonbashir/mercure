@@ -96,6 +96,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           push: true
+          context: mercure
           tags: ghcr.io/${{ github.repository }}-${{ matrix.platform.cpu }}:${{ env.GITHUB_SHA_SHORT }}
           file: Dockerfile.redis
 
