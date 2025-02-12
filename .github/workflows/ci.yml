@@ -39,6 +39,17 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: 1.23
+          cache-dependency-path: |
+            go.sum
+            caddy/go.sum
+
       - name: Build
         run: cd caddy && go mod tidy && go build -o ../mercure mercure/main.go
 
@@ -138,14 +149,3 @@ jobs:
       - uses: shogo82148/actions-goveralls@v1
         with:
           parallel-finished: true
-
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 1.23
-          cache-dependency-path: |
-            go.sum
-            caddy/go.sum
