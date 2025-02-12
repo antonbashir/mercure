@@ -3,19 +3,11 @@ package mercure
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
-	"strconv"
 	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/context"
-)
-
-const (
-	defaultRedisReceiveTimer           = 300 * time.Millisecond
-	defaultSubscriberSize              = 100000
-	defaultSubscriberBroadcastParallel = 16
 )
 
 const (
@@ -26,10 +18,6 @@ const (
 		return true
 	`
 )
-
-func init() {
-	RegisterTransportFactory("redis", NewRedisTransport)
-}
 
 type RedisTransport struct {
 	sync.RWMutex
@@ -48,56 +36,12 @@ type SubscriberPayload struct {
 	payload    Update
 }
 
-func NewRedisTransport(transportUrl *url.URL, logger Logger) (Transport, error) {
-	var err error
-	q := transportUrl.Query()
-
-	receiveTimer := defaultRedisReceiveTimer
-	receiveTimerParameter := q.Get("receive_timer")
-	if receiveTimerParameter != "" {
-		receiveTimer, err = time.ParseDuration(receiveTimerParameter)
-		if err != nil {
-			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "receive_timer" parameter %q`, receiveTimerParameter), err}
-		}
-	}
-
-	subscribersSize := defaultSubscriberSize
-	subscribersSizeParameter := q.Get("subscribers_size")
-	if subscribersSizeParameter != "" {
-		subscribersSize, err = strconv.Atoi(subscribersSizeParameter)
-		if err != nil {
-			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "subscribers_size" parameter %q`, subscribersSizeParameter), err}
-		}
-	}
-
-	subscribersBroadcastParallel := defaultSubscriberBroadcastParallel
-	subscribersBroadcastParallelParameter := q.Get("subscribers_broadcast_parallel")
-	if subscribersBroadcastParallelParameter != "" {
-		subscribersBroadcastParallel, err = strconv.Atoi(subscribersBroadcastParallelParameter)
-		if err != nil {
-			return nil, &TransportError{transportUrl.Redacted(), fmt.Sprintf(`invalid "subscribers_broadcast_parallel" parameter %q`, subscribersBroadcastParallelParameter), err}
-		}
-	}
-
-	username := ""
-	password := ""
-	credentials := transportUrl.User
-	if credentials != nil {
-		username = credentials.Username()
-		password, _ = credentials.Password()
-	}
-
-	address := transportUrl.Host
-	if address == "" {
-		return nil, &TransportError{transportUrl.Redacted(), "missing host", err}
-	}
-
+func NewRedisTransport(logger Logger, address string, username string, password string, receiveTimer time.Duration, subscribersSize int, subscribersBroadcastParallel int) (Transport, error) {
 	client := redis.NewClient(&redis.Options{
 		Username: username,
 		Password: password,
 		Addr:     address,
 	})
-
 	return NewRedisTransportInstance(logger, client, receiveTimer, subscribersSize, subscribersBroadcastParallel)
 }
 
