@@ -92,7 +92,7 @@ jobs:
         uses: rlespinasse/github-slug-action@v5
 
       - name: Prepare mercury
-        uses: cp mercure-${{ matrix.os }} mercure
+        run: cp mercure-${{ matrix.os }} mercure
 
       - name: Build and push
         uses: docker/build-push-action@v6
