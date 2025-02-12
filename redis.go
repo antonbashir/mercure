@@ -170,9 +170,8 @@ func (t *RedisTransport) Close() (err error) {
 	close(t.closed)
 
 	if err != nil {
-		
 		return fmt.Errorf("unable to close: %w", err)
-	}	
+	}
 
 	return nil
 }
