@@ -83,7 +83,7 @@ func NewRedisTransportInstance(
 func (u Update) MarshalBinary() ([]byte, error) {
 	bytes, err := json.Marshal(u)
 	if err != nil {
-		return nil, fmt.Errorf("redis marshal error: %v", err)
+		return nil, err
 	}
 	return bytes, nil
 }
