@@ -84,7 +84,6 @@ func NewRedisTransportInstance(
 func (u Update) MarshalBinary() ([]byte, error) {
 	bytes, err := json.Marshal(u)
 	if err != nil {
-
 		return nil, err
 	}
 
@@ -177,11 +176,13 @@ func (t *RedisTransport) subscribe(subscriber *redis.PubSub) {
 			message, err := subscriber.ReceiveMessage(context.Background())
 			if err != nil {
 				t.logger.Error(err.Error())
+
 				continue
 			}
 			var update Update
 			if err := json.Unmarshal([]byte(message.Payload), &update); err != nil {
 				t.logger.Error(err.Error())
+
 				continue
 			}
 			topics := []string{}
@@ -196,6 +197,7 @@ func (t *RedisTransport) subscribe(subscriber *redis.PubSub) {
 			if err := subscriber.Close(); err != nil {
 				t.logger.Error(err.Error())
 			}
+
 			return
 		}
 	}
@@ -208,6 +210,7 @@ func (t *RedisTransport) dispatch(wg *sync.WaitGroup) {
 		case message := <-t.dispatcher:
 			message.subscriber.Dispatch(&message.payload, false)
 		case <-t.closed:
+
 			return
 		}
 	}
