@@ -150,7 +150,7 @@ test.describe("Publish update", () => {
             console.log(`EventSource event received: ${e.data}`);
             if (
               e.type === "message" &&
-              e.lastEventId === event.get("id") &&
+              e.lastEventID === event.get("id") &&
               e.data === event.get("data")
             ) {
               es.close();

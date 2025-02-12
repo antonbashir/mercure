@@ -133,14 +133,14 @@ foo`;
     $updates.textContent = "No updates pushed yet.";
 
     const {
-      elements: { topics, lastEventId },
+      elements: { topics, lastEventID },
     } = this;
 
     const topicList = topics.value.split("\n");
     const u = new URL($settingsForm.hubUrl.value);
     topicList.forEach((topic) => u.searchParams.append("topic", topic));
-    if (lastEventId.value) {
-      u.searchParams.append("lastEventID", lastEventId.value);
+    if (lastEventID.value) {
+      u.searchParams.append("lastEventID", lastEventID.value);
     }
 
     let ol = null;
@@ -162,7 +162,7 @@ foo`;
       }
 
       const li = document.importNode($updateTemplate.content, true);
-      li.querySelector("h2").textContent = e.lastEventId;
+      li.querySelector("h2").textContent = e.lastEventID;
       li.querySelector("pre").textContent = e.data;
       ol.firstChild ? ol.insertBefore(li, ol.firstChild) : ol.appendChild(li);
     };

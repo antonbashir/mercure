@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	lastEventIdKey = "lastEventId"
+	lastEventIDKey = "lastEventID"
 	publishScript  = `
 		redis.call("SET", KEYS[1], ARGV[1])
 		redis.call("PUBLISH", "*", ARGV[2])
@@ -81,7 +81,11 @@ func NewRedisTransportInstance(
 }
 
 func (u Update) MarshalBinary() ([]byte, error) {
-	return json.Marshal(u)
+	bytes, err := json.Marshal(u)
+	if err != nil {
+		return nil, fmt.Errorf("redis marshal error: %v", err)
+	}
+	return bytes, nil
 }
 
 func (t *RedisTransport) Dispatch(update *Update) error {
@@ -93,7 +97,7 @@ func (t *RedisTransport) Dispatch(update *Update) error {
 
 	AssignUUID(update)
 
-	keys := []string{lastEventIdKey}
+	keys := []string{lastEventIDKey}
 	arguments := []interface{}{update.ID, update}
 	_, err := t.publishScript.Run(context.Background(), t.client, keys, arguments...).Result()
 	if err != nil {
@@ -136,11 +140,11 @@ func (t *RedisTransport) GetSubscribers() (string, []*Subscriber, error) {
 	}
 	t.RLock()
 	defer t.RUnlock()
-	lastEventId, err := t.client.Get(context.Background(), lastEventIdKey).Result()
+	lastEventID, err := t.client.Get(context.Background(), lastEventIDKey).Result()
 	if err != nil {
 		return "", nil, fmt.Errorf("redis failed to get last event id: %w", err)
 	}
-	return lastEventId, getSubscribers(t.subscribers), nil
+	return lastEventID, getSubscribers(t.subscribers), nil
 }
 
 func (t *RedisTransport) Close() (err error) {
