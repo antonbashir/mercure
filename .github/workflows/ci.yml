@@ -66,9 +66,9 @@ jobs:
   build-docker:
     strategy:
       matrix: 
-        os:
-          - ubuntu-latest
-          - macos-latest
+        platform:
+          - {os: ubuntu-latest, cpu: amd64}
+          - {os: macos-latest,  cpu: aarch64}
     runs-on: ubuntu-latest
     name: Build Docker
     needs: build-go
@@ -76,7 +76,7 @@ jobs:
       - name: Download a single artifact
         uses: actions/download-artifact@v4
         with:
-          name: mercure-${{ matrix.os }}
+          name: mercure-${{ matrix.platform.os }}
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
@@ -92,13 +92,13 @@ jobs:
         uses: rlespinasse/github-slug-action@v5
 
       - name: Prepare mercury
-        run: cp mercure-${{ matrix.os }} mercure
+        run: cp mercure-${{ matrix.platform.os }} mercure
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ env.GITHUB_SHA_SHORT }}
+          tags: ghcr.io/${{ github.repository }}-${{ matrix.platform.cpu }}:${{ env.GITHUB_SHA_SHORT }}
           file: Dockerfile.redis
 
   test:
