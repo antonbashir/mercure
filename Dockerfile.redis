@@ -1,0 +1,5 @@
+# syntax=docker/dockerfile:1
+FROM caddy:2-alpine
+
+COPY mercure /usr/bin/caddy
+COPY redis.Caddyfile /etc/caddy/Caddyfile

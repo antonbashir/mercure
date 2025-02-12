@@ -25,7 +25,7 @@ type RedisTransport struct {
 	client                       *redis.Client
 	subscribers                  *SubscriberList
 	subscribersBroadcastParallel int
-	receiveTimer                 time.Duration
+	dispatchTimer                time.Duration
 	dispatcher                   chan SubscriberPayload
 	closed                       chan any
 	publishScript                *redis.Script
@@ -36,19 +36,19 @@ type SubscriberPayload struct {
 	payload    Update
 }
 
-func NewRedisTransport(logger Logger, address string, username string, password string, receiveTimer time.Duration, subscribersSize int, subscribersBroadcastParallel int) (Transport, error) {
+func NewRedisTransport(logger Logger, address string, username string, password string, dispatchTimer time.Duration, subscribersSize int, subscribersBroadcastParallel int) (Transport, error) {
 	client := redis.NewClient(&redis.Options{
 		Username: username,
 		Password: password,
 		Addr:     address,
 	})
-	return NewRedisTransportInstance(logger, client, receiveTimer, subscribersSize, subscribersBroadcastParallel)
+	return NewRedisTransportInstance(logger, client, dispatchTimer, subscribersSize, subscribersBroadcastParallel)
 }
 
 func NewRedisTransportInstance(
 	logger Logger,
 	client *redis.Client,
-	receiveTimer time.Duration,
+	dispatchTimer time.Duration,
 	subscribersSize int,
 	subscribersBroadcastParallel int,
 ) (*RedisTransport, error) {
@@ -60,7 +60,7 @@ func NewRedisTransportInstance(
 		subscribers:                  NewSubscriberList(subscribersSize),
 		subscribersBroadcastParallel: subscribersBroadcastParallel,
 		publishScript:                redis.NewScript(publishScript),
-		receiveTimer:                 receiveTimer,
+		dispatchTimer:                dispatchTimer,
 		closed:                       make(chan any),
 		dispatcher:                   make(chan SubscriberPayload),
 	}
@@ -161,7 +161,7 @@ func (t *RedisTransport) Close() (err error) {
 }
 
 func (t *RedisTransport) subscribe(subscriber *redis.PubSub) {
-	ticker := time.NewTicker(t.receiveTimer)
+	ticker := time.NewTicker(t.dispatchTimer)
 	defer ticker.Stop()
 	for {
 		select {

@@ -13,13 +13,13 @@ import (
 
 const (
 	redisHost                        = "localhost:6379"
-	redisReceiveTimer                = 50 * time.Millisecond
+	redisDispatchTimer               = 50 * time.Millisecond
 	redisSubscriberSize              = 100000
 	redisSubscriberBroadcastParallel = 16
 )
 
 func initialize() *RedisTransport {
-	transport, _ := NewRedisTransport(zap.NewNop(), redisHost, "", "", redisReceiveTimer, redisSubscriberSize, redisSubscriberBroadcastParallel)
+	transport, _ := NewRedisTransport(zap.NewNop(), redisHost, "", "", redisDispatchTimer, redisSubscriberSize, redisSubscriberBroadcastParallel)
 	return transport.(*RedisTransport)
 }
 
