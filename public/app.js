@@ -133,14 +133,14 @@ foo`;
     $updates.textContent = "No updates pushed yet.";
 
     const {
-      elements: { topics, lastEventID },
+      elements: { topics, lastEventId },
     } = this;
 
     const topicList = topics.value.split("\n");
     const u = new URL($settingsForm.hubUrl.value);
     topicList.forEach((topic) => u.searchParams.append("topic", topic));
-    if (lastEventID.value) {
-      u.searchParams.append("lastEventID", lastEventID.value);
+    if (lastEventId.value) {
+      u.searchParams.append("lastEventId", lastEventId.value);
     }
 
     let ol = null;
@@ -162,7 +162,7 @@ foo`;
       }
 
       const li = document.importNode($updateTemplate.content, true);
-      li.querySelector("h2").textContent = e.lastEventID;
+      li.querySelector("h2").textContent = e.lastEventId;
       li.querySelector("pre").textContent = e.data;
       ol.firstChild ? ol.insertBefore(li, ol.firstChild) : ol.appendChild(li);
     };
@@ -253,7 +253,7 @@ foo`;
         "topic",
         "/.well-known/mercure/subscriptions{/topic}{/subscriber}",
       );
-      u.searchParams.append("lastEventID", json.lastEventID);
+      u.searchParams.append("lastEventId", json.lastEventId);
 
       if (opt) subscriptionEventSource = new EventSourcePolyfill(u, opt);
       else subscriptionEventSource = new EventSource(u);
