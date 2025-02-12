@@ -33,7 +33,7 @@ jobs:
         with:
           version: latest
           args: --timeout=30m
-  
+
   build:
     name: Build
     runs-on: ubuntu-latest
@@ -47,7 +47,7 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-                    
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
