@@ -62,6 +62,10 @@ jobs:
         if: matrix.go != '1.23'
         run: ./tests/use-go-deadlock.sh
 
+      - uses: shogo82148/actions-setup-redis@v1
+        with:
+          redis-version: "7.x"
+
       - name: Test
         run: go test -timeout 300s -race -covermode atomic -coverprofile=profile.cov -coverpkg=github.com/dunglas/mercure ./...
 
