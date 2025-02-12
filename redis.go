@@ -84,7 +84,6 @@ func NewRedisTransportInstance(
 func (u Update) MarshalBinary() ([]byte, error) {
 	bytes, err := json.Marshal(u)
 	if err != nil {
-
 		return nil, err
 	}
 
@@ -148,7 +147,6 @@ func (t *RedisTransport) GetSubscribers() (string, []*Subscriber, error) {
 	defer t.RUnlock()
 	lastEventID, err := t.client.Get(context.Background(), lastEventIDKey).Result()
 	if err != nil {
-
 		return "", nil, fmt.Errorf("redis failed to get last event id: %w", err)
 	}
 
