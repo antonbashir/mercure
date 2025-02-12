@@ -76,6 +76,7 @@ jobs:
       - name: Download a single artifact
         uses: actions/download-artifact@v4
         with:
+          path: mercure
           name: mercure-${{ matrix.platform.os }}
 
       - name: Login to GitHub Container Registry
@@ -90,9 +91,6 @@ jobs:
 
       - name: Inject enhanced GitHub environment variables
         uses: rlespinasse/github-slug-action@v5
-
-      - name: Prepare mercury
-        run: cp mercure-${{ matrix.platform.os }} mercure
 
       - name: Build and push
         uses: docker/build-push-action@v6
