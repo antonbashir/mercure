@@ -12,3 +12,4 @@ dist
 /spec/mercure.xml
 *.rdb
 __debug*
+_dist
