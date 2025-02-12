@@ -42,6 +42,7 @@ func NewRedisTransport(logger Logger, address string, username string, password 
 		Password: password,
 		Addr:     address,
 	})
+
 	return NewRedisTransportInstance(logger, client, dispatchTimer, subscribersSize, subscribersBroadcastParallel)
 }
 
@@ -83,8 +84,10 @@ func NewRedisTransportInstance(
 func (u Update) MarshalBinary() ([]byte, error) {
 	bytes, err := json.Marshal(u)
 	if err != nil {
+
 		return nil, err
 	}
+
 	return bytes, nil
 }
 
@@ -117,6 +120,7 @@ func (t *RedisTransport) AddSubscriber(s *LocalSubscriber) error {
 	defer t.Unlock()
 	t.subscribers.Add(s)
 	s.Ready()
+
 	return nil
 }
 
