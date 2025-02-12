@@ -50,7 +50,7 @@ jobs:
             caddy/go.sum
 
       - name: Build
-        run: cd caddy && go mod tidy && go build -o ../mercure mercure/main.go
+        run: cd caddy && go mod tidy && go build -o ../mercure mercure/main.go && cd ..
 
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
