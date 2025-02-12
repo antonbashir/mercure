@@ -253,7 +253,7 @@ foo`;
         "topic",
         "/.well-known/mercure/subscriptions{/topic}{/subscriber}",
       );
-      u.searchParams.append("lastEventID", json.lastEventId);
+      u.searchParams.append("lastEventID", json.lastEventID);
 
       if (opt) subscriptionEventSource = new EventSourcePolyfill(u, opt);
       else subscriptionEventSource = new EventSource(u);
