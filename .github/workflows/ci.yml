@@ -139,3 +139,4 @@ jobs:
           push: true
           tags: antonbashir/mercure:${GITHUB_REF_POINT}
           file: Dockerfile.redis
+          
