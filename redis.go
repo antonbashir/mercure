@@ -169,7 +169,12 @@ func (t *RedisTransport) Close() (err error) {
 	err = t.client.Close()
 	close(t.closed)
 
-	return fmt.Errorf("unable to close: %w", err)
+	if err != nil {
+		
+		return fmt.Errorf("unable to close: %w", err)
+	}	
+
+	return nil
 }
 
 func (t *RedisTransport) subscribe(subscriber *redis.PubSub) {
