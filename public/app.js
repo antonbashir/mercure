@@ -140,7 +140,7 @@ foo`;
     const u = new URL($settingsForm.hubUrl.value);
     topicList.forEach((topic) => u.searchParams.append("topic", topic));
     if (lastEventId.value) {
-      u.searchParams.append("lastEventId", lastEventId.value);
+      u.searchParams.append("lastEventID", lastEventId.value);
     }
 
     let ol = null;
@@ -253,7 +253,7 @@ foo`;
         "topic",
         "/.well-known/mercure/subscriptions{/topic}{/subscriber}",
       );
-      u.searchParams.append("lastEventId", json.lastEventId);
+      u.searchParams.append("lastEventID", json.lastEventId);
 
       if (opt) subscriptionEventSource = new EventSourcePolyfill(u, opt);
       else subscriptionEventSource = new EventSource(u);
