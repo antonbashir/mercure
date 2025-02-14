@@ -33,12 +33,12 @@
 		{$MERCURE_EXTRA_DIRECTIVES}
     
     transport redis {
-      address {env.MERCURE_REDIS_ADDRESS}
-      username {env.MERCURE_REDIS_USERNAME}
-      password {env.MERCURE_REDIS_PASSWORD}
-      dispatch_timer {env.MERCURE_REDIS_DISPATCH_TIMER}
-      subscribers_size {env.MERCURE_REDIS_SUBSCRIBERS_SIZE}
-      subscribers_broadcast_parallel {env.MERCURE_REDIS_SUBSCRIBERS_BROADCAST_PARALLEL}
+      address ${MERCURE_REDIS_ADDRESS}
+      username ${MERCURE_REDIS_USERNAME}
+      password ${MERCURE_REDIS_PASSWORD}
+      dispatch_timer ${MERCURE_REDIS_DISPATCH_TIMER}
+      subscribers_size ${MERCURE_REDIS_SUBSCRIBERS_SIZE}
+      subscribers_broadcast_parallel ${MERCURE_REDIS_SUBSCRIBERS_BROADCAST_PARALLEL}
     }
 	}
 
