@@ -54,12 +54,23 @@ jobs:
       - name: Inject enhanced GitHub environment variables
         uses: rlespinasse/github-slug-action@v5
 
-      - name: Build and push
+      - name: Build image
         uses: docker/build-push-action@v6
         with:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ env.GITHUB_SHA_SHORT }}
           file: Dockerfile.redis
+      
+      - name: Install Helm
+        uses: azure/setup-helm@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build Chart
+        uses: JimCronqvist/action-helm-chart-repo@master
+        with:
+          chartsPath: charts
+          token: ${{ secrets.GITHUB_TOKEN }}      
 
   test:
     strategy:
