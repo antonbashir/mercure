@@ -69,6 +69,7 @@ func (r *Redis) Cleanup() error {
 }
 
 func (r *Redis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
+	replacer := caddy.NewReplacer()
 	for d.Next() {
 		for d.NextBlock(0) {
 			switch d.Val() {
@@ -77,14 +78,14 @@ func (r *Redis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 					return d.ArgErr()
 				}
 
-				r.Address = d.Val()
+				r.Address = replacer.ReplaceKnown(d.Val(), "")
 
 			case "username":
 				if !d.NextArg() {
 					return d.ArgErr()
 				}
 
-				r.Username = d.Val()
+				r.Username = replacer.ReplaceKnown(d.Val(), "")
 
 			case "password":
 				if !d.NextArg() {
@@ -98,7 +99,7 @@ func (r *Redis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 					return d.ArgErr()
 				}
 
-				dispatch_timer, err := time.ParseDuration(d.Val())
+				dispatch_timer, err := time.ParseDuration(replacer.ReplaceKnown(d.Val(), ""))
 				if err != nil {
 					return err
 				}
@@ -109,7 +110,7 @@ func (r *Redis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 					return d.ArgErr()
 				}
 
-				s, e := strconv.Atoi(d.Val())
+				s, e := strconv.Atoi(replacer.ReplaceKnown(d.Val(), ""))
 				if e != nil {
 					return e
 				}
@@ -121,7 +122,7 @@ func (r *Redis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 					return d.ArgErr()
 				}
 
-				s, e := strconv.Atoi(d.Val())
+				s, e := strconv.Atoi(replacer.ReplaceKnown(d.Val(), ""))
 				if e != nil {
 					return e
 				}
