@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/redis/go-redis/v9"
 	"golang.org/x/net/context"
@@ -25,7 +24,6 @@ type RedisTransport struct {
 	client                       *redis.Client
 	subscribers                  *SubscriberList
 	subscribersBroadcastParallel int
-	dispatchTimer                time.Duration
 	dispatcher                   chan SubscriberPayload
 	closed                       chan any
 	publishScript                *redis.Script
@@ -36,20 +34,19 @@ type SubscriberPayload struct {
 	payload    Update
 }
 
-func NewRedisTransport(logger Logger, address string, username string, password string, dispatchTimer time.Duration, subscribersSize int, subscribersBroadcastParallel int) (*RedisTransport, error) {
+func NewRedisTransport(logger Logger, address string, username string, password string, subscribersSize int, subscribersBroadcastParallel int) (*RedisTransport, error) {
 	client := redis.NewClient(&redis.Options{
 		Username: username,
 		Password: password,
 		Addr:     address,
 	})
 
-	return NewRedisTransportInstance(logger, client, dispatchTimer, subscribersSize, subscribersBroadcastParallel)
+	return NewRedisTransportInstance(logger, client, subscribersSize, subscribersBroadcastParallel)
 }
 
 func NewRedisTransportInstance(
 	logger Logger,
 	client *redis.Client,
-	dispatchTimer time.Duration,
 	subscribersSize int,
 	subscribersBroadcastParallel int,
 ) (*RedisTransport, error) {
@@ -61,12 +58,18 @@ func NewRedisTransportInstance(
 		subscribers:                  NewSubscriberList(subscribersSize),
 		subscribersBroadcastParallel: subscribersBroadcastParallel,
 		publishScript:                redis.NewScript(publishScript),
-		dispatchTimer:                dispatchTimer,
 		closed:                       make(chan any),
 		dispatcher:                   make(chan SubscriberPayload),
 	}
 
-	go transport.subscribe(subscriber)
+	subscribeCtx, subscribeCancel := context.WithCancel(context.Background())
+	go func() {
+		for range transport.closed {
+			subscribeCancel()
+			return
+		}
+	}()
+	go transport.subscribe(subscribeCtx, subscriber)
 
 	wg := sync.WaitGroup{}
 	wg.Add(subscribersBroadcastParallel)
@@ -176,39 +179,32 @@ func (t *RedisTransport) Close() (err error) {
 	return nil
 }
 
-func (t *RedisTransport) subscribe(subscriber *redis.PubSub) {
-	ticker := time.NewTicker(t.dispatchTimer)
-	defer ticker.Stop()
+func (t *RedisTransport) subscribe(ctx context.Context, subscriber *redis.PubSub) {
 	for {
-		select {
-		case <-ticker.C:
-			message, err := subscriber.ReceiveMessage(context.Background())
-			if err != nil {
-				t.logger.Error(err.Error())
-
-				continue
+		message, err := subscriber.ReceiveMessage(ctx)
+		if err != nil {
+			t.logger.Error(err.Error())
+			if err == context.Canceled {
+				if err := subscriber.Close(); err != nil {
+					t.logger.Error(err.Error())
+				}
 			}
-			var update Update
-			if err := json.Unmarshal([]byte(message.Payload), &update); err != nil {
-				t.logger.Error(err.Error())
-
-				continue
-			}
-			topics := []string{}
-			topics = append(topics, update.Topics...)
-			t.Lock()
-			for _, subscriber := range t.subscribers.MatchAny(&update) {
-				update.Topics = topics
-				t.dispatcher <- SubscriberPayload{subscriber, update}
-			}
-			t.Unlock()
-		case <-t.closed:
-			if err := subscriber.Close(); err != nil {
-				t.logger.Error(err.Error())
-			}
-
 			return
 		}
+		var update Update
+		if err := json.Unmarshal([]byte(message.Payload), &update); err != nil {
+			t.logger.Error(err.Error())
+
+			continue
+		}
+		topics := []string{}
+		topics = append(topics, update.Topics...)
+		t.Lock()
+		for _, subscriber := range t.subscribers.MatchAny(&update) {
+			update.Topics = topics
+			t.dispatcher <- SubscriberPayload{subscriber, update}
+		}
+		t.Unlock()
 	}
 }
 

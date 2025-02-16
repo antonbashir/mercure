@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/gob"
 	"strconv"
-	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
@@ -21,7 +20,6 @@ type Redis struct {
 	Password                     string
 	SubscribersSize              int
 	SubscribersBroadcastParallel int
-	DispatchTimer                time.Duration
 
 	transport    *mercure.RedisTransport
 	transportKey string
@@ -46,7 +44,7 @@ func (r *Redis) Provision(ctx caddy.Context) error {
 	r.transportKey = key.String()
 
 	destructor, _, err := TransportUsagePool.LoadOrNew(r.transportKey, func() (caddy.Destructor, error) {
-		t, err := mercure.NewRedisTransport(ctx.Logger(), r.Address, r.Username, r.Password, r.DispatchTimer, r.SubscribersSize, r.SubscribersBroadcastParallel)
+		t, err := mercure.NewRedisTransport(ctx.Logger(), r.Address, r.Username, r.Password, r.SubscribersSize, r.SubscribersBroadcastParallel)
 		if err != nil {
 			return nil, err
 		}
@@ -93,17 +91,6 @@ func (r *Redis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 				}
 
 				r.Username = d.Val()
-
-			case "dispatch_timer":
-				if !d.NextArg() {
-					return d.ArgErr()
-				}
-
-				dispatch_timer, err := time.ParseDuration(replacer.ReplaceKnown(d.Val(), ""))
-				if err != nil {
-					return err
-				}
-				r.DispatchTimer = dispatch_timer
 
 			case "subscribers_size":
 				if !d.NextArg() {

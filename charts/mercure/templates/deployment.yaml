@@ -48,10 +48,6 @@ spec:
             - name: MERCURE_REDIS_USERNAME
               value: "{{ .Values.redis.username }}"
             {{- end }}
-            {{- if .Values.redis.dispatch_timer }}
-            - name: MERCURE_REDIS_DISPATCH_TIMER
-              value: "{{ .Values.redis.dispatch_timer }}"
-            {{- end }}
             {{- if .Values.redis.subscribers_size }}
             - name: MERCURE_REDIS_SUBSCRIBERS_SIZE
               value: "{{ .Values.redis.subscribers_size }}"
