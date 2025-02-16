@@ -60,17 +60,17 @@ jobs:
           push: true
           tags: ghcr.io/${{ github.repository }}:${{ env.GITHUB_SHA_SHORT }}
           file: Dockerfile.redis
-      
+
       - name: Install Helm
         uses: azure/setup-helm@v3
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-      
+
       - name: Build Chart
         uses: JimCronqvist/action-helm-chart-repo@master
         with:
           chartsPath: charts/mercure
-          token: ${{ secrets.GITHUB_TOKEN }}      
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   test:
     strategy:
