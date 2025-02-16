@@ -4,7 +4,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,13 +12,12 @@ import (
 
 const (
 	redisHost                        = "localhost:6379"
-	redisDispatchTimer               = 50 * time.Millisecond
 	redisSubscriberSize              = 100000
 	redisSubscriberBroadcastParallel = 16
 )
 
 func initialize() *RedisTransport {
-	transport, _ := NewRedisTransport(zap.NewNop(), redisHost, "", "", redisDispatchTimer, redisSubscriberSize, redisSubscriberBroadcastParallel)
+	transport, _ := NewRedisTransport(zap.NewNop(), redisHost, "", "", redisSubscriberSize, redisSubscriberBroadcastParallel)
 
 	return transport
 }
