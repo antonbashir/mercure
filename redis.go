@@ -2,6 +2,7 @@ package mercure
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -66,6 +67,7 @@ func NewRedisTransportInstance(
 	go func() {
 		for range transport.closed {
 			subscribeCancel()
+
 			return
 		}
 	}()
@@ -184,11 +186,12 @@ func (t *RedisTransport) subscribe(ctx context.Context, subscriber *redis.PubSub
 		message, err := subscriber.ReceiveMessage(ctx)
 		if err != nil {
 			t.logger.Error(err.Error())
-			if err == context.Canceled {
+			if errors.Is(err, context.Canceled) {
 				if err := subscriber.Close(); err != nil {
 					t.logger.Error(err.Error())
 				}
 			}
+
 			return
 		}
 		var update Update
