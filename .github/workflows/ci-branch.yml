@@ -64,7 +64,7 @@ jobs:
         with:
           chartsPath: charts/mercure
           token: ${{ secrets.GITHUB_TOKEN }}
-          
+
   test:
     strategy:
       matrix:
