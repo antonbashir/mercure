@@ -41,8 +41,11 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Rename chart
+        run: mv charts/mercure charts/mercure-chart
+
       - name: Build Chart
         uses: JimCronqvist/action-helm-chart-repo@master
         with:
-          chartsPath: charts/mercure
+          chartsPath: charts/mercure-chart
           token: ${{ secrets.GITHUB_TOKEN }}
