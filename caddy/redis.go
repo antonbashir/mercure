@@ -90,7 +90,7 @@ func (r *Redis) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 					return d.ArgErr()
 				}
 
-				r.Password = d.Val()
+				r.Password = replacer.ReplaceKnown(d.Val(), "")
 
 			case "subscribers_size":
 				if !d.NextArg() {
