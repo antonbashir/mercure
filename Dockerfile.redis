@@ -9,3 +9,4 @@ FROM caddy:2-alpine
 RUN apk add --no-cache libc6-compat
 COPY --from=builder /image/mercure /usr/bin/caddy
 COPY redis.Caddyfile /etc/caddy/Caddyfile
+COPY redis.dev.Caddyfile /etc/caddy/dev.Caddyfile

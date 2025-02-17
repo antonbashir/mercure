@@ -23,9 +23,15 @@
 		publisher_jwt {env.MERCURE_PUBLISHER_JWT_KEY} {env.MERCURE_PUBLISHER_JWT_ALG}
 		# Subscriber JWT key
 		subscriber_jwt {env.MERCURE_SUBSCRIBER_JWT_KEY} {env.MERCURE_SUBSCRIBER_JWT_ALG}
+		# Permissive configuration for the development environment
+		cors_origins *
+		publish_origins *
+		demo
+		anonymous
+		subscriptions
 		# Extra directives
 		{$MERCURE_EXTRA_DIRECTIVES}
-
+    
     transport redis {
       address {env.MERCURE_REDIS_ADDRESS}
       username {env.MERCURE_REDIS_USERNAME}
@@ -37,21 +43,10 @@
 
 	{$CADDY_SERVER_EXTRA_DIRECTIVES}
 
-	log_skip /robots.txt
-	log_skip /healthz
-	log_skip /favicon.ico
+	redir / /.well-known/mercure/ui/
 
-	header / Content-Type "text/html; charset=utf-8"
-	respond / `<!DOCTYPE html>
-	<html lang=en>
-	<meta charset="utf-8">
-	<meta name="robots" content="noindex">
-	<title>Welcome to Mercure</title>
-	<h1>Welcome to Mercure</h1>
-	<p>The URL of your hub is <code>/.well-known/mercure</code>.
-	Read the documentation on <a href="https://mercure.rocks">Mercure.rocks, real-time apps made easy</a>.`
+	respond /healthz 200
 	respond /robots.txt `User-agent: *
 	Disallow: /`
-	respond /healthz 200
 	respond "Not Found" 404
 }
