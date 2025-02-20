@@ -230,3 +230,5 @@ customLabels: ~
 deployment: ~
 
 networkPolicy: ~
+
+gomaxprocs: 1
