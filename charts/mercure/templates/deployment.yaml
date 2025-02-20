@@ -44,6 +44,10 @@ spec:
           {{- end }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           env:
+            {{- if .Values.gomaxprocs}}
+            - name: GOMAXPROCS
+              value: "{{ .Values.gomaxprocs }}"
+            {{- end }}
             {{- if .Values.redis.address }}
             - name: MERCURE_REDIS_ADDRESS
               value: "{{ .Values.redis.address }}"
