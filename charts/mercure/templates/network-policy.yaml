@@ -7,13 +7,14 @@ metadata:
   labels:
     {{- include "mercure.labels" . | nindent 4}}
 spec:
-  ingress:
-    - ports:
-       - port: 80
-         protocol: TCP
-       - port: 443
-         protocol: TCP
   podSelector:
     matchLabels:
       {{- toYaml .Values.networkPolicy.podSelectorLabels | nindent 8 }}
+  ingress:
+    {{- toYaml .Values.networkPolicy.ingress | nindent 6 }}
+  egress:
+    {{- toYaml .Values.networkPolicy.egress | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
 {{- end }}

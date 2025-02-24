@@ -227,7 +227,10 @@ redis:
 
 customLabels: ~
 
-deployment: ~
+customSelectorLabels: ~
+
+deployment:
+  annotations: ~
 
 networkPolicy: ~
 
