@@ -51,6 +51,9 @@ Selector labels
 {{- define "mercure.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "mercure.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- if .Values.customSelectorLabels }}
+{{- toYaml .Values.customSelectorLabels | nindent 0 }}
+{{- end }}
 {{- end }}
 
 {{/*
